@@ -1,0 +1,90 @@
+---
+title: "Portfolio Piece 5: Polarization in the 115th Congress"
+author: "Rebecca Smith"
+date: "4/26/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The main question this pieces aims to address is how polarized were the most recent members (as of Jan. 2019) of the House of Representatives?
+
+To address this question, I will be using data from VoteView.com. The VoteView data is a set of scores (called "DW-NOMINATE") calculated for each legislator that measures how closely they vote to other members. The result is a measure of their ideology positioned as a comparison to other members. 
+
+```{r load}
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(ggridges)
+
+house_ideo <- read_csv("https://voteview.com/static/data/out/members/Hall_members.csv")
+```
+
+What we're interested in is how far apart the median House member from either party has drifted over time. To do this, I'm going to first filter the data just for Democrats (100) and Republicans (200) and recode. I'm also only going to keep congresses after 1960 (the 89th).
+
+```{r filter}
+house_ideo <- house_ideo %>%
+  filter(party_code %in% c(100,200),congress>89) %>%
+  mutate(party = case_when(party_code == 100 ~ "Democratic",
+                           party_code == 200 ~ "Republican"))
+```
+
+Next, I'll compute the median ideology for each year.
+
+```{r ideo}
+ideo <- house_ideo %>%
+  group_by(congress,party) %>%
+  summarise(ideo = median(nominate_dim1, na.rm=T))
+```
+
+Now, I'm going to create a measure of distance between the median member.
+
+```{r dist}
+distance <- ideo %>%
+  spread(party, ideo) %>%
+  mutate(distance = abs(Democratic - Republican))
+```
+
+Initially, it appears that 2017-19 had the largest difference between the parties since at least 1900. I'm going to create a table of all the differences below.
+
+```{r table}
+distance %>%
+  arrange(desc(distance)) %>%
+  kable(caption = "Distance Between Median Dem. and Rep. House Member Ideology") %>%
+  kable_styling(bootstrap_options = "hover")
+```
+
+And here's a visualization of what that distance looked like over time:
+
+```{r plot}
+gg <- ggplot(distance, aes(x=congress,y=distance)) +
+  geom_line() +
+  labs(title="Polarization Between House Members, 1960-2018",
+       x="Congress",
+       y="Distance between Median Member's Ideology") +
+  theme_minimal()
+
+gg
+```
+
+And another visualization, this time attempting to use ridge plot.
+
+```{r ridge}
+gg <- ggplot(house_ideo,aes(x=nominate_dim1,y=as.factor(congress), fill=party)) +
+  ggridges::geom_density_ridges2(rel_min_height = 0.05, col=NA, scale=4, alpha=0.5) +
+  scale_fill_manual(values=c("Democratic"="blue","Republican"="red")) +
+  labs(title="Polarization Between House Members, 1960-2018",
+       x="Ideology (DW-NOMINATE)",
+       y="Congress") +
+  theme_minimal()
+
+gg
+```
+
+From the ridge plot, we come to two initial conclusions:
+1. Republicans started the shift right before Democrats began shifting left.
+2. Democrats in 2017-19 were more centralized along the spectrum than Republicans.
